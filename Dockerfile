@@ -1,7 +1,5 @@
-# syntax=docker/dockerfile:1.7
-
 # Stage 1: Build API Jar
-FROM eclipse-temurin:23-jdk-alpine AS api-builder
+FROM docker.1ms.run/library/eclipse-temurin:23-jdk-alpine AS api-builder
 
 WORKDIR /workspace
 COPY VERSION .
@@ -12,26 +10,32 @@ RUN chmod +x ./gradlew && \
     jdeps --print-module-deps --ignore-missing-deps build/libs/telegram-files.jar > dependencies.txt
 
 # Stage 2: Build Web Static Assets
-FROM node:22-alpine AS web-builder
+FROM docker.1ms.run/library/node:22-alpine AS web-builder
 
-WORKDIR /app/web
-ENV NEXT_PUBLIC_API_URL=/api \
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+    NEXT_PUBLIC_API_URL=/api \
     NEXT_PUBLIC_WS_URL=/ws \
     NEXT_TELEMETRY_DISABLED=1 \
     SKIP_ENV_VALIDATION=1
+
+WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN npm config set registry https://registry.npmmirror.com && npm ci
 COPY web/ ./
 RUN npm run build
 
 # Stage 3: Build Custom Minimal JRE
-FROM eclipse-temurin:23-jdk-alpine AS runtime-builder
+FROM docker.1ms.run/library/eclipse-temurin:23-jdk-alpine AS runtime-builder
+
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com
 
 WORKDIR /custom-jre
 
 COPY --from=api-builder /workspace/api/dependencies.txt .
-RUN --mount=type=cache,target=/var/cache/apk \
-    apk add --update-cache binutils && \
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk add --no-cache binutils && \
     jlink \
         --add-modules $(cat dependencies.txt) \
         --output jre \
@@ -42,20 +46,23 @@ RUN --mount=type=cache,target=/var/cache/apk \
     apk del binutils
 
 # Stage 4: Final Image
-FROM alpine:3.18.12 AS final
+FROM docker.1ms.run/library/alpine:3.18.12 AS final
 
-WORKDIR /app
-
-ARG TARGETARCH
-ENV JAVA_HOME=/jre \
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+    JAVA_HOME=/jre \
     PATH="/jre/bin:$PATH" \
     LANG=C.UTF-8 \
     NGINX_PORT=80
 
-RUN --mount=type=cache,target=/var/cache/apk \
+WORKDIR /app
+
+ARG TARGETARCH
+
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     addgroup -S tf && \
     adduser -S -G tf tf && \
-    apk add --update-cache nginx wget curl unzip tini su-exec gettext openssl3 libstdc++ gcompat libc6-compat && \
+    apk add --no-cache nginx wget curl unzip tini su-exec gettext openssl3 libstdc++ gcompat libc6-compat && \
     rm -rf /tmp/* /var/tmp/* && \
     touch /run/nginx.pid && \
     chown -R tf:tf /app /etc/nginx /var/lib/nginx /var/log/nginx /run/nginx.pid && \
