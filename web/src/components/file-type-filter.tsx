@@ -64,7 +64,7 @@ export default function FileTypeFilter({
     offline: String(offline),
     ...(offline && seedOnly && { seedOnly: "true" }),
   });
-  const { data: counts, isLoading } = useSWR<Record<FileType, number>>(
+  const { data: counts, isLoading } = useSWR<Record<FileType | "all", number>>(
     `/telegram/${telegramId}/chat/${chatId}/files/count?${countParams.toString()}`,
   );
 
@@ -73,12 +73,9 @@ export default function FileTypeFilter({
     onChange(value);
   };
 
-  useEffect(() => {
-    if (!offline && localType === "all") {
-      setLocalType("media");
-      onChange("media");
-    }
-  }, [localType, offline, onChange]);
+  const allCount = counts
+    ? (counts.all ?? ((counts.media || 0) + (counts.file || 0) + (counts.audio || 0)))
+    : undefined;
 
   return (
     <div className="space-y-2">
@@ -88,7 +85,18 @@ export default function FileTypeFilter({
           <SelectValue placeholder="File type" />
         </SelectTrigger>
         <SelectContent>
-          {offline && <SelectItem value="all">All Files</SelectItem>}
+          <SelectItem value="all">
+            <div className="flex items-center gap-5">
+              <span className="w-10">All</span>
+              {isLoading ? (
+                <Ellipsis className="h-4 w-4 animate-pulse" />
+              ) : (
+                <span className="text-xs text-gray-400">
+                  {allCount !== undefined ? `(${allCount})` : "(0)"}
+                </span>
+              )}
+            </div>
+          </SelectItem>
           <FileTypeSelectItem
             value="media"
             counts={counts}

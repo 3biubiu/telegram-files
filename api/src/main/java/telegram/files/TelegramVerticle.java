@@ -333,7 +333,9 @@ public class TelegramVerticle extends AbstractVerticle {
 
             return (Objects.equals(filter.get("downloadStatus"), FileRecord.DownloadStatus.idle.name()) ?
                     this.getIdleChatFiles(searchChatMessages, 0) :
-                    client.execute(searchChatMessages))
+                    (searchChatMessages.filter instanceof TdApi.SearchMessagesFilterEmpty ?
+                            this.getAllChatFiles(searchChatMessages, 0) :
+                            client.execute(searchChatMessages)))
                     .compose(t -> {
                         preloadThumbnails(t)
                                 .onFailure(err -> log.debug("[%s] Preload thumbnails skipped: %s"
@@ -342,6 +344,25 @@ public class TelegramVerticle extends AbstractVerticle {
                                 .compose(TelegramConverter::enrichSeedAssociations);
                     });
         }
+    }
+
+    private Future<TdApi.FoundChatMessages> getAllChatFiles(TdApi.SearchChatMessages searchChatMessages, int seq) {
+        if (seq != 0) {
+            searchChatMessages.limit = 100;
+        }
+        return client.execute(searchChatMessages)
+                .compose(foundChatMessages -> {
+                    TdApi.Message[] messages = Stream.of(foundChatMessages.messages)
+                            .filter(message -> TdApiHelp.FILE_CONTENT_CONSTRUCTORS.contains(message.content.getConstructor()))
+                            .toArray(TdApi.Message[]::new);
+                    if (ArrayUtil.isEmpty(messages) && foundChatMessages.nextFromMessageId != 0 && seq < 8) {
+                        searchChatMessages.fromMessageId = foundChatMessages.nextFromMessageId;
+                        return getAllChatFiles(searchChatMessages, seq + 1);
+                    } else {
+                        foundChatMessages.messages = messages;
+                        return Future.succeededFuture(foundChatMessages);
+                    }
+                });
     }
 
     private Future<TdApi.FoundChatMessages> getIdleChatFiles(TdApi.SearchChatMessages searchChatMessages, int seq) {
@@ -395,6 +416,8 @@ public class TelegramVerticle extends AbstractVerticle {
         ).map(counts -> {
             JsonObject result = new JsonObject();
             counts.<JsonObject>list().forEach(count -> result.put(count.getString("type"), count.getInteger("count")));
+            int allCount = Convert.toInt(result.getValue("media"), 0) + Convert.toInt(result.getValue("audio"), 0) + Convert.toInt(result.getValue("file"), 0);
+            result.put("all", allCount);
             return result;
         });
     }
@@ -919,7 +942,7 @@ public class TelegramVerticle extends AbstractVerticle {
         });
     }
 
-    private void sendEvent(EventPayload payload) {
+    public void sendEvent(EventPayload payload) {
         vertx.eventBus().publish(EventEnum.TELEGRAM_EVENT.address(),
                 JsonObject.of("telegramId", this.getId(), "payload", JsonObject.mapFrom(payload)));
     }
@@ -1406,12 +1429,18 @@ public class TelegramVerticle extends AbstractVerticle {
                                     downloadStatus = FileRecord.DownloadStatus.idle;
                                 }
                             }
+                            final FileRecord.DownloadStatus effectiveDownloadStatus = downloadStatus;
                             DataVerticle.fileRepository.updateDownloadStatus(file.id,
                                             file.remote.uniqueId,
                                             finalLocalPath,
-                                            downloadStatus,
+                                            effectiveDownloadStatus,
                                             finalCompletionDate)
-                                    .onSuccess(r -> sendFileStatusHttpEvent(file, r));
+                                    .onSuccess(r -> {
+                                        sendFileStatusHttpEvent(file, r);
+                                        if (effectiveDownloadStatus == FileRecord.DownloadStatus.completed && StrUtil.isNotBlank(finalLocalPath)) {
+                                            BatchDownloadManager.onFileDownloadCompleted(file.remote.uniqueId, finalLocalPath);
+                                        }
+                                    });
                         }
                     });
 

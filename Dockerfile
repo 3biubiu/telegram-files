@@ -1,10 +1,35 @@
 # syntax=docker/dockerfile:1.7
 
+# Stage 1: Build API Jar
+FROM eclipse-temurin:23-jdk-alpine AS api-builder
+
+WORKDIR /workspace
+COPY VERSION .
+COPY api ./api
+WORKDIR /workspace/api
+RUN chmod +x ./gradlew && \
+    ./gradlew shadowJar --no-daemon && \
+    jdeps --print-module-deps --ignore-missing-deps build/libs/telegram-files.jar > dependencies.txt
+
+# Stage 2: Build Web Static Assets
+FROM node:22-alpine AS web-builder
+
+WORKDIR /app/web
+ENV NEXT_PUBLIC_API_URL=/api \
+    NEXT_PUBLIC_WS_URL=/ws \
+    NEXT_TELEMETRY_DISABLED=1 \
+    SKIP_ENV_VALIDATION=1
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# Stage 3: Build Custom Minimal JRE
 FROM eclipse-temurin:23-jdk-alpine AS runtime-builder
 
 WORKDIR /custom-jre
 
-COPY ./.docker-artifacts/dependencies.txt .
+COPY --from=api-builder /workspace/api/dependencies.txt .
 RUN --mount=type=cache,target=/var/cache/apk \
     apk add --update-cache binutils && \
     jlink \
@@ -16,6 +41,7 @@ RUN --mount=type=cache,target=/var/cache/apk \
         --compress=2 && \
     apk del binutils
 
+# Stage 4: Final Image
 FROM alpine:3.18.12 AS final
 
 WORKDIR /app
@@ -37,8 +63,8 @@ RUN --mount=type=cache,target=/var/cache/apk \
     chmod +x /usr/bin/tfm
 
 COPY --from=runtime-builder --chown=tf:tf /custom-jre/jre /jre
-COPY --chown=tf:tf ./.docker-artifacts/api.jar /app/api.jar
-COPY --chown=tf:tf ./.docker-artifacts/web/ /app/web/
+COPY --from=api-builder --chown=tf:tf /workspace/api/build/libs/telegram-files.jar /app/api.jar
+COPY --from=web-builder --chown=tf:tf /app/web/out/ /app/web/
 
 COPY --chown=tf:tf ./tdlib/linux_$TARGETARCH /app/tdlib
 COPY --chown=tf:tf ./entrypoint.sh .

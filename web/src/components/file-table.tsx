@@ -8,7 +8,8 @@ import React, {
 } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { SquareChevronLeft, WandSparkles } from "lucide-react";
+import { LayoutList, MessageSquare, SquareChevronLeft, WandSparkles } from "lucide-react";
+import ChatView from "@/components/chat-view";
 import { useFiles } from "@/hooks/use-files";
 import {
   getRowHeightPX,
@@ -133,6 +134,10 @@ export function FileTable({
   const [rowHeight, setRowHeight] = useRowHeightLocalStorage(
     "telegramFileList",
     "m",
+  );
+  const [viewMode, setViewMode] = useLocalStorage<"chat" | "table">(
+    "telegramFileViewMode",
+    "table",
   );
   const useFilesProps = useFiles(accountId, chatId, messageThreadId, link);
   const {
@@ -314,6 +319,28 @@ export function FileTable({
             rowHeight={rowHeight}
             setRowHeightAction={setRowHeight}
           />
+          <div className="flex items-center rounded-lg border bg-muted/40 p-0.5">
+            <Button
+              variant={viewMode === "chat" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2.5 text-xs gap-1.5"
+              onClick={() => setViewMode("chat")}
+              title="切换到对话视图"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">对话</span>
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2.5 text-xs gap-1.5"
+              onClick={() => setViewMode("table")}
+              title="切换到表格视图"
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">表格</span>
+            </Button>
+          </div>
         </div>
       </div>
       {currentViewFile && (
@@ -336,94 +363,113 @@ export function FileTable({
           updateField={updateField}
         />
 
-        <div
-          className="no-scrollbar relative h-full overflow-auto rounded-md border"
-          ref={tableParentRef}
-          onScroll={maybeLoadMore}
-        >
-          <div className="sticky top-0 z-20 flex h-10 items-center border-b bg-background/90 text-sm text-muted-foreground backdrop-blur-sm">
-            <div className="w-[30px] text-center">
-              <Checkbox
-                checked={selectedFiles.size === files.length}
-                onCheckedChange={handleSelectAll}
-              />
+        {viewMode === "chat" ? (
+          <div className="no-scrollbar relative h-full overflow-y-auto rounded-md border bg-muted/10 p-2 sm:p-4">
+            <ChatView
+              files={files}
+              selectedFiles={selectedFiles}
+              onSelectFile={handleSelectFile}
+              onSelectAll={handleSelectAll}
+              isLoading={isLoading}
+              hasMore={!isLoading && files.length < (totalCount ?? 0)}
+              onLoadMore={handleLoadMore}
+              updateField={updateField}
+              onViewFile={(file) => {
+                setCurrentViewFile(file);
+                setViewerOpen(true);
+              }}
+            />
+          </div>
+        ) : (
+          <div
+            className="no-scrollbar relative h-full overflow-auto rounded-md border"
+            ref={tableParentRef}
+            onScroll={maybeLoadMore}
+          >
+            <div className="sticky top-0 z-20 flex h-10 items-center border-b bg-background/90 text-sm text-muted-foreground backdrop-blur-sm">
+              <div className="w-[30px] text-center">
+                <Checkbox
+                  checked={selectedFiles.size === files.length}
+                  onCheckedChange={handleSelectAll}
+                />
+              </div>
+              {columns.map((col) =>
+                col.isVisible ? (
+                  <div
+                    key={col.id}
+                    suppressHydrationWarning
+                    className={cn(
+                      col.className ?? "",
+                      col.id === "content" ? dynamicClass.contentCell : "",
+                    )}
+                  >
+                    {col.tooltip ? (
+                      <TooltipWrapper content={col.tooltip}>
+                        <span className="cursor-help border-b border-dotted border-muted-foreground/60">
+                          {col.label}
+                        </span>
+                      </TooltipWrapper>
+                    ) : (
+                      col.label
+                    )}
+                  </div>
+                ) : null,
+              )}
             </div>
-            {columns.map((col) =>
-              col.isVisible ? (
-                <div
-                  key={col.id}
-                  suppressHydrationWarning
-                  className={cn(
-                    col.className ?? "",
-                    col.id === "content" ? dynamicClass.contentCell : "",
-                  )}
-                >
-                  {col.tooltip ? (
-                    <TooltipWrapper content={col.tooltip}>
-                      <span className="cursor-help border-b border-dotted border-muted-foreground/60">
-                        {col.label}
-                      </span>
-                    </TooltipWrapper>
-                  ) : (
-                    col.label
-                  )}
-                </div>
-              ) : null,
+            {size === 1 && isLoading && (
+              <div className="sticky left-1/2 top-0 z-10 flex h-full w-full items-center justify-center bg-accent">
+                <DotmTriangle2
+                  size={32}
+                  dotSize={4}
+                  speed={1.4}
+                  opacityBase={0.1}
+                  opacityMid={0.4}
+                  opacityPeak={0.95}
+                  ariaLabel="Loading files"
+                />
+              </div>
             )}
-          </div>
-          {size === 1 && isLoading && (
-            <div className="sticky left-1/2 top-0 z-10 flex h-full w-full items-center justify-center bg-accent">
-              <DotmTriangle2
-                size={32}
-                dotSize={4}
-                speed={1.4}
-                opacityBase={0.1}
-                opacityMid={0.4}
-                opacityPeak={0.95}
-                ariaLabel="Loading files"
-              />
+            <div className="h-full">
+              <div
+                className={cn("relative w-full")}
+                style={{ height: `${rowVirtual.getTotalSize()}px` }}
+              >
+                {files.length !== 0 &&
+                  virtualItems.map((virtualRow) => {
+                    const file = files[virtualRow.index]!;
+                    return (
+                      <FileRow
+                        index={virtualRow.index}
+                        className={cn(
+                          "absolute left-0 top-0 flex w-full items-center",
+                        )}
+                        style={{
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                        ref={rowVirtual.measureElement}
+                        file={file}
+                        updateField={updateField}
+                        checked={selectedFiles.has(file.id)}
+                        onCheckedChange={() => handleSelectFile(file.id)}
+                        onFileClick={() => {
+                          setCurrentViewFile(file);
+                          setViewerOpen(true);
+                        }}
+                        properties={{
+                          rowHeight: rowHeight,
+                          dynamicClass,
+                          columns,
+                        }}
+                        key={`${file.messageId}-${file.uniqueId}-${virtualRow.index}`}
+                      />
+                    );
+                  })}
+              </div>
+              {!isLoading && files.length === 0 && <FileNotFount />}
             </div>
-          )}
-          <div className="h-full">
-            <div
-              className={cn("relative w-full")}
-              style={{ height: `${rowVirtual.getTotalSize()}px` }}
-            >
-              {files.length !== 0 &&
-                virtualItems.map((virtualRow) => {
-                  const file = files[virtualRow.index]!;
-                  return (
-                    <FileRow
-                      index={virtualRow.index}
-                      className={cn(
-                        "absolute left-0 top-0 flex w-full items-center",
-                      )}
-                      style={{
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                      ref={rowVirtual.measureElement}
-                      file={file}
-                      updateField={updateField}
-                      checked={selectedFiles.has(file.id)}
-                      onCheckedChange={() => handleSelectFile(file.id)}
-                      onFileClick={() => {
-                        setCurrentViewFile(file);
-                        setViewerOpen(true);
-                      }}
-                      properties={{
-                        rowHeight: rowHeight,
-                        dynamicClass,
-                        columns,
-                      }}
-                      key={`${file.messageId}-${file.uniqueId}-${virtualRow.index}`}
-                    />
-                  );
-                })}
-            </div>
-            {!isLoading && files.length === 0 && <FileNotFount />}
           </div>
-        </div>
+        )}
       </div>
     </>
   );

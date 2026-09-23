@@ -26,6 +26,7 @@ import { toast } from "@/hooks/use-toast";
 import { BatchFileTags } from "@/components/file-tags";
 import Image from "next/image";
 import { useShareEnabled } from "@/hooks/use-share-enabled";
+import BatchDownloadDialog from "./batch-download-dialog";
 
 function getSeedResourceId(file: TelegramFile): string | null {
   return (
@@ -292,6 +293,7 @@ function ControlButton({
   fileMapper,
 }: ControlButtonProps) {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [batchDownloadDialogOpen, setBatchDownloadDialogOpen] = useState(false);
 
   const selectedFileObjects = Array.from(selectedFiles)
     .map((id) => files.find((f) => f.id === id))
@@ -318,6 +320,9 @@ function ControlButton({
       }: {
         arg: {
           files: Array<Record<string, unknown>>;
+          subfolder?: string;
+          preserveOrder?: boolean;
+          destination?: string;
         } & Record<string, any>;
       },
     ) => POST(key, arg),
@@ -352,8 +357,43 @@ function ControlButton({
     setConfirmDialogOpen(false);
   };
 
+  const handleBatchDownloadConfirm = (options: {
+    subfolder?: string;
+    preserveOrder: boolean;
+    orderedFiles: TelegramFile[];
+  }) => {
+    const mapper = fileMapper ?? defaultFileMapper;
+    const mappedFiles: Record<string, unknown>[] = [];
+    options.orderedFiles.forEach((file, idx) => {
+      const base = mapper(file);
+      if (base) {
+        mappedFiles.push({
+          ...base,
+          orderIndex: idx + 1,
+        });
+      }
+    });
+
+    if (mappedFiles.length === 0) {
+      toast({
+        variant: "error",
+        description: "No valid files to process.",
+      });
+      return;
+    }
+
+    void trigger({
+      subfolder: options.subfolder,
+      preserveOrder: options.preserveOrder,
+      files: mappedFiles,
+      ...extra,
+    });
+  };
+
   const handleClick = () => {
-    if (showConfirm) {
+    if (label === "Download") {
+      setBatchDownloadDialogOpen(true);
+    } else if (showConfirm) {
       setConfirmDialogOpen(true);
     } else {
       handleAction();
@@ -502,6 +542,16 @@ function ControlButton({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {label === "Download" && (
+        <BatchDownloadDialog
+          open={batchDownloadDialogOpen}
+          onOpenChange={setBatchDownloadDialogOpen}
+          files={validFiles}
+          onConfirm={handleBatchDownloadConfirm}
+          isMutating={isMutating}
+        />
+      )}
     </>
   );
 }

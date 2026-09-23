@@ -9,6 +9,7 @@ import cn.hutool.core.convert.TypeConverter;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.ClassUtil;
 import cn.hutool.core.util.ReflectUtil;
+import cn.hutool.core.util.StrUtil;
 import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import org.drinkless.tdlib.TdApi;
@@ -95,12 +96,16 @@ public class TdApiHelp {
     }
 
     public static TdApi.SearchMessagesFilter getSearchMessagesFilter(String fileType) {
+        if (StrUtil.isBlank(fileType)) {
+            return new TdApi.SearchMessagesFilterEmpty();
+        }
         return switch (fileType) {
             case "media" -> new TdApi.SearchMessagesFilterPhotoAndVideo();
             case "photo" -> new TdApi.SearchMessagesFilterPhoto();
             case "video" -> new TdApi.SearchMessagesFilterVideo();
             case "audio" -> new TdApi.SearchMessagesFilterAudio();
             case "file" -> new TdApi.SearchMessagesFilterDocument();
+            case "all" -> new TdApi.SearchMessagesFilterEmpty();
             default -> null;
         };
     }
@@ -112,6 +117,7 @@ public class TdApiHelp {
             case TdApi.SearchMessagesFilterVideo.CONSTRUCTOR -> "video";
             case TdApi.SearchMessagesFilterAudio.CONSTRUCTOR -> "audio";
             case TdApi.SearchMessagesFilterDocument.CONSTRUCTOR -> "file";
+            case TdApi.SearchMessagesFilterEmpty.CONSTRUCTOR -> "all";
             default -> "unknown";
         };
     }

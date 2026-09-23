@@ -1,7 +1,10 @@
 services:
   telegram-files:
     container_name: telegram-files
-    image: ghcr.io/jarvis2f/telegram-files:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: telegram-files:${IMAGE_TAG:-latest}
     restart: always
     depends_on:
       telegram-files-postgres:
@@ -50,6 +53,7 @@ services:
       - "${PORT:-6543}:80"
     volumes:
       - ${DATA_DIR:-./data}:/app/data
+      - ${DOWNLOAD_DIR:-./downloads}:/app/data/downloads
 
   telegram-files-qbittorrent:
     container_name: telegram-files-qbittorrent

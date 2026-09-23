@@ -1254,6 +1254,16 @@ public class HttpVerticle extends AbstractVerticle {
         }
         List<Path> roots = new ArrayList<>();
         roots.add(Path.of(Config.TELEGRAM_ROOT));
+        if (StrUtil.isNotBlank(Config.APP_ROOT)) {
+            roots.add(Path.of(Config.APP_ROOT));
+        }
+        try {
+            Path defaultDownload = Path.of(BatchDownloadManager.getDefaultDownloadDir());
+            if (Files.isDirectory(defaultDownload)) {
+                roots.add(defaultDownload);
+            }
+        } catch (Exception ignore) {
+        }
         Path sharedRoot = Config.shareConfiguration().sharedRoot();
         if (Files.isDirectory(sharedRoot)) {
             roots.add(sharedRoot);
@@ -1274,7 +1284,8 @@ public class HttpVerticle extends AbstractVerticle {
         }
 
         telegramVerticle.startDownload(chatId, messageId, fileId)
-                .onSuccess(ctx::json).onFailure(ctx::fail);
+                .onSuccess(fileRecord -> ctx.json(JsonObject.mapFrom(fileRecord)))
+                .onFailure(ctx::fail);
     }
 
     private void handleFileCancelDownload(RoutingContext ctx) {
@@ -1322,6 +1333,25 @@ public class HttpVerticle extends AbstractVerticle {
     }
 
     private void handleFileStartDownloadMultiple(RoutingContext ctx) {
+        JsonObject body = ctx.body().asJsonObject();
+        String destination = body != null ? body.getString("destination") : null;
+        String subfolder = body != null ? body.getString("subfolder") : null;
+        boolean preserveOrder = body != null && body.getBoolean("preserveOrder", true);
+        JsonArray files = body != null ? body.getJsonArray("files") : null;
+
+        if (CollUtil.isNotEmpty(files) && (StrUtil.isNotBlank(subfolder) || preserveOrder || StrUtil.isNotBlank(destination))) {
+            String batchId = cn.hutool.core.util.IdUtil.fastSimpleUUID();
+            int total = files.size();
+            for (int i = 0; i < total; i++) {
+                Object f = files.getValue(i);
+                if (f instanceof JsonObject obj) {
+                    String uniqueId = obj.getString("uniqueId");
+                    int orderIndex = obj.getInteger("orderIndex", i + 1);
+                    BatchDownloadManager.registerBatchFile(uniqueId, batchId, destination, subfolder, preserveOrder, orderIndex, total);
+                }
+            }
+        }
+
         handleFileControlMultiple(ctx, (telegramVerticle, file) -> {
             Long chatId = file.getLong("chatId");
             Long messageId = file.getLong("messageId");
