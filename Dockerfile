@@ -1,6 +1,9 @@
 # Stage 1: Build API Jar
 FROM docker.1ms.run/library/eclipse-temurin:23-jdk-alpine AS api-builder
 
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com
+
 WORKDIR /workspace
 COPY VERSION .
 COPY api ./api
@@ -12,8 +15,8 @@ RUN chmod +x ./gradlew && \
 # Stage 2: Build Web Static Assets
 FROM docker.1ms.run/library/node:22-alpine AS web-builder
 
-ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
-    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com \
     NEXT_PUBLIC_API_URL=/api \
     NEXT_PUBLIC_WS_URL=/ws \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -28,8 +31,8 @@ RUN npm run build
 # Stage 3: Build Custom Minimal JRE
 FROM docker.1ms.run/library/eclipse-temurin:23-jdk-alpine AS runtime-builder
 
-ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
-    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com
 
 WORKDIR /custom-jre
 
@@ -48,8 +51,8 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 # Stage 4: Final Image
 FROM docker.1ms.run/library/alpine:3.18.12 AS final
 
-ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
-    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com \
+ENV NO_PROXY=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com \
+    no_proxy=localhost,127.0.0.1,mirrors.aliyun.com,registry.npmmirror.com,maven.aliyun.com,mirrors.cloud.tencent.com \
     JAVA_HOME=/jre \
     PATH="/jre/bin:$PATH" \
     LANG=C.UTF-8 \

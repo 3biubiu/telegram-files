@@ -15,10 +15,14 @@ out/
 
 **/*.log
 api.log.lck
+.env
+**/.env
 **/.env.*
 !**/.env.example
 
-http-client.private.env.json
-
+docker-compose.yaml
+docker-compose.yml
 docker-compose-*.yaml
 docker-compose-*.yml
+!docker-compose.example.yaml
+!docker-compose.example.yml
