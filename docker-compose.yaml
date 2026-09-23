@@ -53,7 +53,8 @@ services:
       - "${PORT:-6543}:80"
     volumes:
       - ${DATA_DIR:-./data}:/app/data
-      - ${DOWNLOAD_DIR:-./downloads}:/app/data/downloads
+      # 如需单独挂载下载文件夹到其他盘，可解开下行注释：
+      # - ${DOWNLOAD_DIR:-./downloads}:/app/data/downloads
 
   telegram-files-qbittorrent:
     container_name: telegram-files-qbittorrent
