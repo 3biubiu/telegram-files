@@ -15,6 +15,7 @@ import { useDebounce, useDebouncedCallback } from "use-debounce";
 const DEFAULT_FILTERS: FileFilter = {
   search: "",
   type: "media",
+  types: ["photo", "video"],
   downloadStatus: undefined,
   transferStatus: undefined,
   offline: false,
@@ -74,11 +75,18 @@ export function useFiles(
     { ...DEFAULT_FILTERS, offline: noAccountSpecified },
   );
   const getKey = (page: number, previousPageData: FileResponse) => {
+    const typesParam =
+      filters.types && filters.types.length > 0
+        ? filters.types.length === 4
+          ? "all"
+          : filters.types.join(",")
+        : filters.type || "all";
+
     const params = new URLSearchParams({
       ...(filters.search && {
         search: window.encodeURIComponent(filters.search),
       }),
-      ...(filters.type && { type: filters.type }),
+      ...(typesParam && { type: typesParam }),
       ...(filters.downloadStatus && { downloadStatus: filters.downloadStatus }),
       ...(filters.transferStatus && { transferStatus: filters.transferStatus }),
       ...(filters.offline && { offline: "true" }),
@@ -89,7 +97,9 @@ export function useFiles(
       ...(messageThreadId && { messageThreadId: messageThreadId.toString() }),
       ...(link && { link: window.encodeURIComponent(link) }),
       ...(filters.dateType && { dateType: filters.dateType }),
-      ...(filters.dateRange && { dateRange: filters.dateRange.join(",") }),
+      ...(filters.dateRange &&
+        filters.dateRange[0] &&
+        filters.dateRange[1] && { dateRange: filters.dateRange.join(",") }),
       ...(filters.sizeRange && { sizeRange: filters.sizeRange.join(",") }),
       ...(filters.sizeUnit && { sizeUnit: filters.sizeUnit }),
       ...(filters.sort && { sort: filters.sort }),
@@ -329,6 +339,48 @@ export function useFiles(
         ) {
           return;
         }
+        // Multi-type filter check
+        if (
+          filters.types &&
+          filters.types.length > 0 &&
+          filters.types.length < 4
+        ) {
+          if (!filters.types.includes(merged.type)) {
+            return;
+          }
+        } else if (filters.type && filters.type !== "all") {
+          const allowedTypes =
+            filters.type === "media"
+              ? ["photo", "video"]
+              : filters.type.split(",").map((t) => t.trim());
+          if (!allowedTypes.includes(merged.type)) {
+            return;
+          }
+        }
+
+        // Date range filter check (sent date or downloaded date)
+        if (
+          filters.dateRange &&
+          filters.dateRange[0] &&
+          filters.dateRange[1]
+        ) {
+          const startTs = new Date(
+            filters.dateRange[0] + "T00:00:00",
+          ).getTime();
+          const endTs = new Date(
+            filters.dateRange[1] + "T23:59:59.999",
+          ).getTime();
+          const fileTs =
+            filters.dateType === "downloaded"
+              ? merged.completionDate
+              : merged.date
+                ? merged.date * 1000
+                : 0;
+          if (!fileTs || fileTs < startTs || fileTs > endTs) {
+            return;
+          }
+        }
+
         files.push(merged);
       });
     });
@@ -342,6 +394,10 @@ export function useFiles(
     latestFilesStatus,
     filters.downloadStatus,
     filters.transferStatus,
+    filters.types,
+    filters.type,
+    filters.dateRange,
+    filters.dateType,
   ]);
 
   const hasMore = useMemo(() => {

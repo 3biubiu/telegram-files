@@ -186,9 +186,21 @@ export default function BatchDownloadDialog({
                 const seq = orderedFileList.length >= 100
                   ? String(idx + 1).padStart(3, "0")
                   : String(idx + 1).padStart(2, "0");
+                const cleanCaption = file.caption
+                  ? (file.caption.split("\n")[0]?.trim().replace(/[<>:"/\\|?*]/g, "_") ?? "")
+                  : "";
+                const baseDisplayName =
+                  file.fileName ||
+                  (cleanCaption
+                    ? cleanCaption.toLowerCase().endsWith(".jpg")
+                      ? cleanCaption
+                      : `${cleanCaption}.jpg`
+                    : file.type === "photo"
+                      ? "photo.jpg"
+                      : "file");
                 const previewName = preserveOrder
-                  ? `${seq}_${file.fileName || "file"}`
-                  : file.fileName || "file";
+                  ? `${seq}_${baseDisplayName}`
+                  : baseDisplayName;
 
                 return (
                   <div

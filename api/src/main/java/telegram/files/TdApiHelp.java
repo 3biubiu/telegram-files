@@ -16,6 +16,7 @@ import org.drinkless.tdlib.TdApi;
 import telegram.files.repository.FileRecord;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @SuppressWarnings("unchecked")
 public class TdApiHelp {
@@ -99,6 +100,20 @@ public class TdApiHelp {
         if (StrUtil.isBlank(fileType)) {
             return new TdApi.SearchMessagesFilterEmpty();
         }
+        if (fileType.contains(",")) {
+            String[] types = fileType.split(",");
+            Set<String> set = Arrays.stream(types)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && !"all".equalsIgnoreCase(s))
+                    .collect(Collectors.toSet());
+            if (set.size() == 2 && set.contains("photo") && set.contains("video")) {
+                return new TdApi.SearchMessagesFilterPhotoAndVideo();
+            }
+            if (set.size() == 1) {
+                return getSearchMessagesFilter(set.iterator().next());
+            }
+            return new TdApi.SearchMessagesFilterEmpty();
+        }
         return switch (fileType) {
             case "media" -> new TdApi.SearchMessagesFilterPhotoAndVideo();
             case "photo" -> new TdApi.SearchMessagesFilterPhoto();
@@ -106,7 +121,7 @@ public class TdApiHelp {
             case "audio" -> new TdApi.SearchMessagesFilterAudio();
             case "file" -> new TdApi.SearchMessagesFilterDocument();
             case "all" -> new TdApi.SearchMessagesFilterEmpty();
-            default -> null;
+            default -> new TdApi.SearchMessagesFilterEmpty();
         };
     }
 
@@ -327,6 +342,19 @@ public class TdApiHelp {
         @Override
         public FileRecord convertFileRecord(long telegramId) {
             TdApi.File file = getFile();
+            String captionText = content.caption != null ? content.caption.text : null;
+            String photoFileName = null;
+            if (StrUtil.isNotBlank(captionText)) {
+                String cleanCaption = BatchDownloadManager.extractCleanTitle(captionText);
+                if (StrUtil.isNotBlank(cleanCaption)) {
+                    photoFileName = cleanCaption.toLowerCase().endsWith(".jpg") || cleanCaption.toLowerCase().endsWith(".jpeg")
+                            ? cleanCaption
+                            : cleanCaption + ".jpg";
+                }
+            }
+            if (StrUtil.isBlank(photoFileName)) {
+                photoFileName = "photo_" + message.date + "_" + getFileId() + ".jpg";
+            }
             return new FileRecord(
                     getFileId(),
                     file.remote.uniqueId,
@@ -339,8 +367,8 @@ public class TdApiHelp {
                     file.size == 0 ? file.expectedSize : file.size,
                     file.local == null ? 0 : file.local.downloadedSize,
                     "photo",
-                    null,
-                    null,
+                    "image/jpeg",
+                    photoFileName,
                     Base64.encode((byte[]) BeanUtil.getProperty(content, "photo.minithumbnail.data")),
                     getThumbnailFileUniqueId(),
                     content.caption.text,

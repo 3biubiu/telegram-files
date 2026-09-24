@@ -511,7 +511,12 @@ public class TelegramVerticle extends AbstractVerticle {
                     if (file.local != null) {
                         if (file.local.isDownloadingCompleted) {
                             return syncFileDownloadStatus(file, message, messageThreadInfo)
-                                    .compose(_ -> DataVerticle.fileRepository.getByUniqueId(file.remote.uniqueId));
+                                    .compose(_ -> {
+                                        if (StrUtil.isNotBlank(file.local.path)) {
+                                            BatchDownloadManager.onFileDownloadCompleted(file.remote.uniqueId, file.local.path);
+                                        }
+                                        return DataVerticle.fileRepository.getByUniqueId(file.remote.uniqueId);
+                                    });
                         }
                         if (file.local.isDownloadingActive) {
                             return Future.failedFuture("File is downloading");
@@ -519,6 +524,10 @@ public class TelegramVerticle extends AbstractVerticle {
 //                        return Future.failedFuture("Unknown file download status");
                     }
                     if (dbFileRecord != null && !dbFileRecord.isDownloadStatus(FileRecord.DownloadStatus.idle)) {
+                        if (dbFileRecord.isDownloadStatus(FileRecord.DownloadStatus.completed) && StrUtil.isNotBlank(dbFileRecord.localPath())) {
+                            BatchDownloadManager.onFileDownloadCompleted(dbFileRecord.uniqueId(), dbFileRecord.localPath());
+                            return Future.succeededFuture(dbFileRecord);
+                        }
                         return Future.failedFuture("File is already downloading or completed");
                     }
 
@@ -1418,6 +1427,9 @@ public class TelegramVerticle extends AbstractVerticle {
                             if (fileRecord.isDownloadStatus(FileRecord.DownloadStatus.completed) &&
                                 fileRecord.isTransferStatus(FileRecord.TransferStatus.completed) &&
                                 FileUtil.exist(fileRecord.localPath())) {
+                                if (StrUtil.isNotBlank(finalLocalPath)) {
+                                    BatchDownloadManager.onFileDownloadCompleted(file.remote.uniqueId, finalLocalPath);
+                                }
                                 return;
                             }
                             if (downloadStatus == null) {
@@ -1511,6 +1523,9 @@ public class TelegramVerticle extends AbstractVerticle {
                 })
                 .compose(r -> {
                     sendFileStatusHttpEvent(file, r);
+                    if (file.local != null && StrUtil.isNotBlank(file.local.path)) {
+                        BatchDownloadManager.onFileDownloadCompleted(file.remote.uniqueId, file.local.path);
+                    }
                     // Reconciliation is idempotent: an empty update means the database already
                     // contains the same completed path and status, not that synchronization failed.
                     return Future.succeededFuture();

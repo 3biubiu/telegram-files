@@ -1347,7 +1347,9 @@ public class HttpVerticle extends AbstractVerticle {
                 if (f instanceof JsonObject obj) {
                     String uniqueId = obj.getString("uniqueId");
                     int orderIndex = obj.getInteger("orderIndex", i + 1);
-                    BatchDownloadManager.registerBatchFile(uniqueId, batchId, destination, subfolder, preserveOrder, orderIndex, total);
+                    String fileName = obj.getString("fileName");
+                    String caption = obj.getString("caption");
+                    BatchDownloadManager.registerBatchFile(uniqueId, batchId, destination, subfolder, preserveOrder, orderIndex, total, fileName, caption);
                 }
             }
         }

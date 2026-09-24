@@ -109,11 +109,31 @@ public class FileRepositoryImpl extends AbstractSqlRepository implements FileRep
             params.put("search", "%%" + search + "%%");
         }
         if (StrUtil.isNotBlank(type) && !Objects.equals(type, "all")) {
-            if (Objects.equals(type, "media")) {
-                whereClause += " AND type IN ('photo', 'video')";
-            } else {
-                whereClause += " AND type = #{type}";
-                params.put("type", type);
+            String[] rawTypes = type.split(",");
+            List<String> validTypes = new ArrayList<>();
+            for (String t : rawTypes) {
+                t = t.trim();
+                if (Objects.equals(t, "media")) {
+                    validTypes.add("photo");
+                    validTypes.add("video");
+                } else if (StrUtil.isNotBlank(t) && !Objects.equals(t, "all")) {
+                    validTypes.add(t);
+                }
+            }
+            validTypes = validTypes.stream().distinct().collect(Collectors.toList());
+            if (CollUtil.isNotEmpty(validTypes)) {
+                if (validTypes.size() == 1) {
+                    whereClause += " AND type = #{type}";
+                    params.put("type", validTypes.get(0));
+                } else {
+                    String typePlaceholders = IntStream.range(0, validTypes.size())
+                            .mapToObj(i -> "#{typeParam" + i + "}")
+                            .collect(Collectors.joining(","));
+                    whereClause += " AND type IN (" + typePlaceholders + ")";
+                    for (int i = 0; i < validTypes.size(); i++) {
+                        params.put("typeParam" + i, validTypes.get(i));
+                    }
+                }
             }
         }
         if (StrUtil.isNotBlank(downloadStatus)) {

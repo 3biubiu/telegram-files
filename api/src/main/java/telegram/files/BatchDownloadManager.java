@@ -31,14 +31,22 @@ public class BatchDownloadManager {
         public final boolean preserveOrder;
         public final int orderIndex;
         public final int totalFiles;
+        public final String preferredFileName;
+        public final String caption;
 
         public BatchFileInfo(String batchId, String baseDestination, String subfolder, boolean preserveOrder, int orderIndex, int totalFiles) {
+            this(batchId, baseDestination, subfolder, preserveOrder, orderIndex, totalFiles, null, null);
+        }
+
+        public BatchFileInfo(String batchId, String baseDestination, String subfolder, boolean preserveOrder, int orderIndex, int totalFiles, String preferredFileName, String caption) {
             this.batchId = batchId;
             this.baseDestination = baseDestination;
             this.subfolder = subfolder;
             this.preserveOrder = preserveOrder;
             this.orderIndex = orderIndex;
             this.totalFiles = totalFiles;
+            this.preferredFileName = preferredFileName;
+            this.caption = caption;
         }
     }
 
@@ -68,16 +76,32 @@ public class BatchDownloadManager {
         return StrUtil.isBlank(cleaned) ? "file" : cleaned;
     }
 
+    public static String extractCleanTitle(String text) {
+        if (StrUtil.isBlank(text)) {
+            return "";
+        }
+        String firstLine = text.lines().findFirst().orElse("").trim();
+        String cleaned = sanitizeFileName(firstLine);
+        if (cleaned.length() > 60) {
+            cleaned = cleaned.substring(0, 60).trim();
+        }
+        return cleaned;
+    }
+
     /**
      * Register a batch download task for tracking and folder management.
      */
     public static void registerBatchFile(String uniqueId, String batchId, String baseDestination, String subfolder, boolean preserveOrder, int orderIndex, int totalFiles) {
+        registerBatchFile(uniqueId, batchId, baseDestination, subfolder, preserveOrder, orderIndex, totalFiles, null, null);
+    }
+
+    public static void registerBatchFile(String uniqueId, String batchId, String baseDestination, String subfolder, boolean preserveOrder, int orderIndex, int totalFiles, String preferredFileName, String caption) {
         if (StrUtil.isBlank(uniqueId)) {
             return;
         }
         String dest = StrUtil.isNotBlank(baseDestination) ? baseDestination : getDefaultDownloadDir();
-        ACTIVE_BATCH_FILES.put(uniqueId, new BatchFileInfo(batchId, dest, subfolder, preserveOrder, orderIndex, totalFiles));
-        log.debug("Registered batch file: uniqueId={}, batchId={}, subfolder={}, orderIndex={}/{}", uniqueId, batchId, subfolder, orderIndex, totalFiles);
+        ACTIVE_BATCH_FILES.put(uniqueId, new BatchFileInfo(batchId, dest, subfolder, preserveOrder, orderIndex, totalFiles, preferredFileName, caption));
+        log.debug("Registered batch file: uniqueId={}, batchId={}, subfolder={}, orderIndex={}/{}, name={}, caption={}", uniqueId, batchId, subfolder, orderIndex, totalFiles, preferredFileName, caption);
     }
 
     public static boolean isBatchFile(String uniqueId) {
@@ -116,9 +140,36 @@ public class BatchDownloadManager {
 
                 FileUtil.mkdir(targetDir.toFile());
 
-                String rawFileName = fileRecord != null && StrUtil.isNotBlank(fileRecord.fileName())
-                        ? fileRecord.fileName()
-                        : originFile.getName();
+                String rawFileName = null;
+                // 1. Check preferredFileName from client
+                if (StrUtil.isNotBlank(info.preferredFileName) && !info.preferredFileName.matches("^\\d{15,}.*")) {
+                    rawFileName = info.preferredFileName;
+                }
+                // 2. Check stored fileRecord fileName
+                if (StrUtil.isBlank(rawFileName) && fileRecord != null && StrUtil.isNotBlank(fileRecord.fileName()) && !fileRecord.fileName().matches("^\\d{15,}.*")) {
+                    rawFileName = fileRecord.fileName();
+                }
+                // 3. If still blank or numeric id, check caption (especially for photos!)
+                if (StrUtil.isBlank(rawFileName)) {
+                    String caption = StrUtil.isNotBlank(info.caption)
+                            ? info.caption
+                            : (fileRecord != null ? fileRecord.caption() : null);
+                    String cleanTitle = extractCleanTitle(caption);
+                    if (StrUtil.isNotBlank(cleanTitle)) {
+                        String ext = FileUtil.extName(originFile.getName());
+                        if (StrUtil.isBlank(ext) && fileRecord != null && "photo".equalsIgnoreCase(fileRecord.type())) {
+                            ext = "jpg";
+                        }
+                        rawFileName = StrUtil.isNotBlank(ext)
+                                ? (cleanTitle.toLowerCase().endsWith("." + ext.toLowerCase()) ? cleanTitle : cleanTitle + "." + ext)
+                                : cleanTitle;
+                    }
+                }
+                // 4. Fallback to origin file name on disk
+                if (StrUtil.isBlank(rawFileName)) {
+                    rawFileName = originFile.getName();
+                }
+
                 String cleanedFileName = sanitizeFileName(rawFileName);
 
                 String finalFileName;

@@ -161,16 +161,20 @@ public abstract class Transfer {
      */
     protected String buildFileName(FileRecord fileRecord) {
         String originalName = FileUtil.getName(fileRecord.localPath());
+        String defaultName = (StrUtil.isNotBlank(fileRecord.fileName()) && !fileRecord.fileName().matches("^\\d{15,}.*"))
+                ? fileRecord.fileName()
+                : originalName;
+
         if (!useCaptionName || StrUtil.isBlank(fileRecord.caption())) {
-            return originalName;
+            return defaultName;
         }
         String caption = sanitizeForFileName(fileRecord.caption());
         if (StrUtil.isBlank(caption)) {
-            return originalName;
+            return defaultName;
         }
-        String extension = FileUtil.extName(originalName);
-        String baseName = FileUtil.mainName(originalName);
-        String stem = "%s_%s".formatted(baseName, caption);
+        String extension = FileUtil.extName(defaultName);
+        String baseName = FileUtil.mainName(defaultName);
+        String stem = baseName.matches("^\\d{15,}.*") ? caption : "%s_%s".formatted(baseName, caption);
         String suffix = StrUtil.isBlank(extension) ? "" : "." + extension;
         // Cap the whole file name (preserving the extension) so a long original name plus the
         // caption can't exceed common filesystem limits.

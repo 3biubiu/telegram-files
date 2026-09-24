@@ -150,7 +150,8 @@ export type SortFields = "date" | "completion_date" | "size" | "reaction_count";
 
 export type FileFilter = {
   search: string;
-  type: FileType | "all";
+  type: FileType | "all" | string;
+  types?: FileType[];
   downloadStatus?: DownloadStatus;
   transferStatus?: TransferStatus;
   offline: boolean;

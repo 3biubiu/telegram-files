@@ -8,7 +8,13 @@ import React, {
 } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { LayoutList, MessageSquare, SquareChevronLeft, WandSparkles } from "lucide-react";
+import {
+  CalendarRange,
+  LayoutList,
+  MessageSquare,
+  SquareChevronLeft,
+  WandSparkles,
+} from "lucide-react";
 import ChatView from "@/components/chat-view";
 import { useFiles } from "@/hooks/use-files";
 import {
@@ -267,6 +273,41 @@ export function FileTable({
     setSelectedFiles(newSelected);
   };
 
+  const typeBadgeLabel = useMemo(() => {
+    const rawTypes =
+      filters.types && filters.types.length > 0
+        ? filters.types
+        : filters.type === "all"
+          ? []
+          : filters.type === "media"
+            ? (["photo", "video"] as const)
+            : filters.type
+              ? filters.type.split(",").map((t) => t.trim())
+              : [];
+
+    if (rawTypes.length === 0 || rawTypes.length === 4) {
+      return "全部类型";
+    }
+
+    const typeNames: Record<string, string> = {
+      photo: "图片",
+      video: "视频",
+      file: "文件",
+      audio: "音频",
+      media: "媒体",
+    };
+
+    return rawTypes.map((t) => typeNames[t] || t).join(" + ");
+  }, [filters.types, filters.type]);
+
+  const dateBadgeLabel = useMemo(() => {
+    if (!filters.dateRange || !filters.dateRange[0] || !filters.dateRange[1]) {
+      return null;
+    }
+    const typeText = filters.dateType === "downloaded" ? "下载" : "发送";
+    return `${typeText}: ${filters.dateRange[0]} ~ ${filters.dateRange[1]}`;
+  }, [filters.dateRange, filters.dateType]);
+
   return (
     <>
       <div className="mb-6 flex flex-col flex-wrap justify-between gap-2 md:flex-row">
@@ -289,9 +330,21 @@ export function FileTable({
             </Badge>
           ) : (
             <>
-              <Badge variant="outline" className="flex h-full bg-accent">
-                {filters.type.charAt(0).toUpperCase() + filters.type.slice(1)}
+              <Badge
+                variant="outline"
+                className="flex h-full items-center bg-accent text-xs"
+              >
+                {typeBadgeLabel}
               </Badge>
+              {dateBadgeLabel && (
+                <Badge
+                  variant="outline"
+                  className="flex h-full items-center gap-1 bg-accent text-xs"
+                >
+                  <CalendarRange className="h-3 w-3 text-muted-foreground" />
+                  <span>{dateBadgeLabel}</span>
+                </Badge>
+              )}
               <FileFilters
                 telegramId={accountId}
                 chatId={chatId}

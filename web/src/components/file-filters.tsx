@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useEffect, useRef, useState } from "react";
-import { format } from "date-fns";
+import { format, subDays, subMonths, startOfYear, startOfDay } from "date-fns";
 import {
   ArrowDownNarrowWide,
   ArrowUpNarrowWide,
@@ -118,7 +118,7 @@ const TagsFilter = ({ tags, onChange }: TagsFilterProps) => {
 interface DateFilterProps {
   dateType: "sent" | "downloaded" | undefined;
   dateRange: [string, string] | undefined;
-  onChange: (type: "sent" | "downloaded", range: [string, string]) => void;
+  onChange: (type: "sent" | "downloaded", range: [string, string] | undefined) => void;
 }
 
 const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
@@ -134,15 +134,34 @@ const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
     dateRange?.[1] ? new Date(dateRange[1]) : undefined,
   ]);
 
+  useEffect(() => {
+    setLocalType(dateType ?? "sent");
+    setLocalRange([
+      dateRange?.[0] ? new Date(dateRange[0]) : undefined,
+      dateRange?.[1] ? new Date(dateRange[1]) : undefined,
+    ]);
+  }, [dateType, dateRange]);
+
   const handleTypeChange = (type: "sent" | "downloaded") => {
     setLocalType(type);
+    if (localRange[0] && localRange[1]) {
+      onChange(type, [
+        format(localRange[0], "yyyy-MM-dd"),
+        format(localRange[1], "yyyy-MM-dd"),
+      ]);
+    } else {
+      onChange(type, undefined);
+    }
   };
 
   const handleRangeSelect = (range?: {
     from: Date | undefined;
     to?: Date | undefined;
   }) => {
-    if (!range) return;
+    if (!range) {
+      setLocalRange([undefined, undefined]);
+      return;
+    }
 
     setLocalRange([range.from, range.to]);
     if (range.from && range.to) {
@@ -153,28 +172,107 @@ const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
     }
   };
 
-  const getDisplayText = () => {
-    if (!dateRange?.[0] && !dateRange?.[1]) return "Select date range";
-    if (dateRange[0] && dateRange[1]) {
-      return `${format(new Date(dateRange[0]), "LLL dd, y")} - ${format(new Date(dateRange[1]), "LLL dd, y")}`;
+  const handleClear = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setLocalRange([undefined, undefined]);
+    onChange(localType, undefined);
+  };
+
+  const applyPreset = (preset: "today" | "7days" | "30days" | "3months" | "year") => {
+    const now = new Date();
+    let from: Date;
+    const to: Date = now;
+
+    switch (preset) {
+      case "today":
+        from = startOfDay(now);
+        break;
+      case "7days":
+        from = subDays(now, 7);
+        break;
+      case "30days":
+        from = subDays(now, 30);
+        break;
+      case "3months":
+        from = subMonths(now, 3);
+        break;
+      case "year":
+        from = startOfYear(now);
+        break;
     }
-    return "Date range selected";
+
+    setLocalRange([from, to]);
+    onChange(localType, [
+      format(from, "yyyy-MM-dd"),
+      format(to, "yyyy-MM-dd"),
+    ]);
+  };
+
+  const hasDateRange = Boolean(dateRange?.[0] && dateRange?.[1]);
+
+  const getDisplayText = () => {
+    if (!hasDateRange) return "选择日期范围 (不限)";
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      return `${dateRange[0]} 至 ${dateRange[1]}`;
+    }
+    return "已选日期范围";
   };
 
   return (
     <div className="space-y-2">
-      <Label>Date Filter</Label>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Label className="font-medium text-sm">日期范围</Label>
+          <span className="text-[11px] text-muted-foreground">(非必选)</span>
+        </div>
+        {hasDateRange && (
+          <button
+            type="button"
+            onClick={(e) => handleClear(e)}
+            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+          >
+            清除日期
+          </button>
+        )}
+      </div>
+
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
-            className="w-full justify-start text-left font-normal"
+            className={cn(
+              "w-full justify-between text-left font-normal h-9 text-xs transition-colors",
+              hasDateRange && "border-primary/40 bg-primary/5 text-foreground font-medium",
+            )}
           >
-            <CalendarRange className="mr-2 h-4 w-4" />
-            <span className="flex-1">{getDisplayText()}</span>
-            <span className="ml-2 rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-              {localType === "downloaded" ? "Download" : "Sent"}
-            </span>
+            <div className="flex items-center gap-2 truncate">
+              <CalendarRange
+                className={cn(
+                  "h-4 w-4 shrink-0",
+                  hasDateRange ? "text-primary" : "text-muted-foreground",
+                )}
+              />
+              <span className="truncate">{getDisplayText()}</span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {localType === "downloaded" ? "下载日期" : "发送日期"}
+              </span>
+              {hasDateRange && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleClear();
+                  }}
+                  className="rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                  title="清除日期筛选"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </span>
+              )}
+            </div>
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -182,26 +280,83 @@ const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
           side={isMobile ? undefined : "right"}
           modal={true}
         >
-          <div className="space-y-4">
-            <div className="flex gap-2">
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between gap-2 border-b pb-2.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                日期维度
+              </span>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant={localType === "sent" ? "default" : "outline"}
+                  onClick={() => handleTypeChange("sent")}
+                  className="h-7 px-2.5 text-xs"
+                >
+                  发送日期
+                </Button>
+                <Button
+                  size="sm"
+                  variant={localType === "downloaded" ? "default" : "outline"}
+                  onClick={() => handleTypeChange("downloaded")}
+                  className="h-7 px-2.5 text-xs"
+                >
+                  下载日期
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1">
               <Button
                 size="sm"
-                variant={localType === "sent" ? "default" : "outline"}
-                onClick={() => handleTypeChange("sent")}
-                className="flex-1"
+                variant={!hasDateRange ? "secondary" : "outline"}
+                className="h-6 px-2 text-[11px]"
+                onClick={() => handleClear()}
               >
-                Sent Date
+                不限
               </Button>
               <Button
                 size="sm"
-                variant={localType === "downloaded" ? "default" : "outline"}
-                onClick={() => handleTypeChange("downloaded")}
-                className="flex-1"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => applyPreset("today")}
               >
-                Downloaded
+                今天
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => applyPreset("7days")}
+              >
+                近 7 天
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => applyPreset("30days")}
+              >
+                近 30 天
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => applyPreset("3months")}
+              >
+                近 3 个月
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => applyPreset("year")}
+              >
+                今年
               </Button>
             </div>
-            <div className="rounded-md border p-2">
+
+            <div className="rounded-md border p-1">
               <Calendar
                 mode="range"
                 selected={{
@@ -209,9 +364,36 @@ const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
                   to: localRange[1],
                 }}
                 onSelect={handleRangeSelect}
-                numberOfMonths={2}
+                numberOfMonths={isMobile ? 1 : 2}
                 defaultMonth={localRange[0] ?? new Date()}
               />
+            </div>
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <span className="text-muted-foreground text-[11px]">
+                {hasDateRange
+                  ? `已选择: ${dateRange?.[0]} 至 ${dateRange?.[1]}`
+                  : "未选择日期范围 (查询全部时间)"}
+              </span>
+              <div className="flex gap-2">
+                {hasDateRange && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => handleClear()}
+                  >
+                    清除
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setOpen(false)}
+                >
+                  确定
+                </Button>
+              </div>
             </div>
           </div>
         </PopoverContent>
@@ -658,10 +840,41 @@ export default function FileFilters({
     setLocalFilters(filters);
   }, [filters]);
 
+  const currentTypes: FileType[] = React.useMemo(() => {
+    if (localFilters.types && Array.isArray(localFilters.types)) {
+      return localFilters.types.filter((t) => t !== "media");
+    }
+    if (!localFilters.type || localFilters.type === "all") {
+      return [];
+    }
+    if (localFilters.type === "media") {
+      return ["photo", "video"];
+    }
+    return localFilters.type
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is FileType =>
+        ["photo", "video", "file", "audio"].includes(s),
+      );
+  }, [localFilters.types, localFilters.type]);
+
   const filterCount = Object.entries(filters).filter(([key, value]) => {
-    if (["offline", "sort", "order", "dateType", "sizeUnit"].includes(key))
+    if (
+      ["offline", "sort", "order", "dateType", "sizeUnit", "type"].includes(key)
+    )
       return false;
-    if (typeof value === "string") return value !== "";
+    if (key === "types") {
+      return Array.isArray(value) && value.length > 0 && value.length < 4;
+    }
+    if (key === "dateRange") {
+      return (
+        Array.isArray(value) &&
+        value.length === 2 &&
+        Boolean(value[0]) &&
+        Boolean(value[1])
+      );
+    }
+    if (typeof value === "string") return value !== "" && value !== "all";
     if (typeof value === "boolean") return value;
     if (Array.isArray(value)) return value.length > 0;
     return false;
@@ -671,8 +884,12 @@ export default function FileFilters({
     setLocalFilters((prev) => ({ ...prev, search }));
   };
 
-  const handleTypeChange = (type: FileType | "all") => {
-    setLocalFilters((prev) => ({ ...prev, type }));
+  const handleTypesChange = (types: FileType[], typeStr?: string) => {
+    setLocalFilters((prev) => ({
+      ...prev,
+      types,
+      type: (typeStr || (types.length === 0 ? "all" : types.join(","))) as any,
+    }));
   };
 
   const handleStatusChange = (
@@ -692,7 +909,7 @@ export default function FileFilters({
 
   const handleDateChange = (
     dateType: "sent" | "downloaded",
-    dateRange: [string, string],
+    dateRange: [string, string] | undefined,
   ) => {
     setLocalFilters((prev) => ({ ...prev, dateType, dateRange }));
   };
@@ -972,9 +1189,16 @@ export default function FileFilters({
               offline={localFilters.offline}
               telegramId={telegramId}
               chatId={chatId}
-              type={filters.type}
+              types={currentTypes}
+              type={localFilters.type}
               seedOnly={localFilters.seedOnly}
-              onChange={handleTypeChange}
+              onChange={handleTypesChange}
+            />
+
+            <DateFilter
+              dateType={localFilters.dateType}
+              dateRange={localFilters.dateRange}
+              onChange={handleDateChange}
             />
 
             {!localFilters.offline && (
@@ -1005,12 +1229,6 @@ export default function FileFilters({
                 <TagsFilter
                   tags={localFilters.tags}
                   onChange={handleTagsChange}
-                />
-
-                <DateFilter
-                  dateType={localFilters.dateType}
-                  dateRange={localFilters.dateRange}
-                  onChange={handleDateChange}
                 />
 
                 <SizeFilter

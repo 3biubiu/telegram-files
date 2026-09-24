@@ -309,6 +309,8 @@ function ControlButton({
     messageId: file.messageId ?? 0,
     fileId: file.id ?? 0,
     uniqueId: file.uniqueId,
+    fileName: file.fileName,
+    caption: file.caption,
   });
 
   const { trigger, isMutating } = useSWRMutation(
