@@ -15,6 +15,13 @@ import FileTags from "@/components/file-tags";
 import { Badge } from "@/components/ui/badge";
 import { TooltipWrapper } from "@/components/ui/tooltip";
 import { FileSharing, FileSource } from "@/components/file-provenance";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { SquareCheckBig } from "lucide-react";
 
 type FileRowProps = {
   index: number;
@@ -36,6 +43,8 @@ type FileRowProps = {
     columns: Column[];
   };
   onCheckedChange: (checked: boolean) => void;
+  onSelectTo: () => void;
+  canSelectTo: boolean;
   onFileClick: () => void;
 };
 
@@ -49,6 +58,8 @@ export default function FileRow({
   updateField,
   properties,
   onCheckedChange,
+  onSelectTo,
+  canSelectTo,
   onFileClick,
 }: FileRowProps) {
   const { rowHeight, dynamicClass, columns } = properties;
@@ -137,42 +148,62 @@ export default function FileRow({
   };
 
   return (
-    <div
-      data-index={index}
-      className={cn("flex w-full flex-col border-b", className)}
-      style={style}
-      ref={ref}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div className="flex w-full flex-1 items-center hover:bg-accent">
-        <div className="w-[30px] text-center">
-          <Checkbox checked={checked} onCheckedChange={onCheckedChange} />
-        </div>
-        {columns.map((col) =>
-          col.isVisible ? (
-            <div
-              key={col.id}
-              className={cn(
-                col.className ?? "",
-                col.id === "content" ? dynamicClass.contentCell : "",
-              )}
-            >
-              {columnRenders[col.id]}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          data-index={index}
+          className={cn("flex w-full flex-col border-b", className)}
+          style={style}
+          ref={ref}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          <div className="flex w-full flex-1 items-center hover:bg-accent">
+            <div className="w-[30px] text-center">
+              <Checkbox
+                checked={checked}
+                onCheckedChange={onCheckedChange}
+                onClick={(event) => {
+                  // Shift 点击走范围选择；preventDefault 会拦掉 Radix 内部的 toggle
+                  if (event.shiftKey) {
+                    event.preventDefault();
+                    onSelectTo();
+                  }
+                }}
+              />
             </div>
-          ) : null,
-        )}
-      </div>
-      {downloadProgress > 0 && downloadProgress !== 100 && (
-        <div className="flex w-full items-end justify-between gap-2 px-2 pb-1">
-          <Progress
-            value={downloadProgress}
-            variant="download"
-            data-download-state={file.downloadStatus}
-            className="flex-1 md:w-32"
-          />
+            {columns.map((col) =>
+              col.isVisible ? (
+                <div
+                  key={col.id}
+                  className={cn(
+                    col.className ?? "",
+                    col.id === "content" ? dynamicClass.contentCell : "",
+                  )}
+                >
+                  {columnRenders[col.id]}
+                </div>
+              ) : null,
+            )}
+          </div>
+          {downloadProgress > 0 && downloadProgress !== 100 && (
+            <div className="flex w-full items-end justify-between gap-2 px-2 pb-1">
+              <Progress
+                value={downloadProgress}
+                variant="download"
+                data-download-state={file.downloadStatus}
+                className="flex-1 md:w-32"
+              />
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem disabled={!canSelectTo} onSelect={onSelectTo}>
+          <SquareCheckBig />
+          选择到这里
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

@@ -119,6 +119,8 @@ export function FileTable({
   link,
 }: FileTableProps) {
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
+  // 「选择到这里」的锚点：最近一次操作过的行索引
+  const [selectAnchor, setSelectAnchor] = useState<number | null>(null);
   const tableParentRef = useRef<HTMLDivElement>(null);
   const shareEnabled = useShareEnabled();
   const defaultColumns = useMemo(() => {
@@ -223,7 +225,8 @@ export function FileTable({
       return;
     }
     const index = files.findIndex(
-      (f) => f.id === currentViewFile.id || f.uniqueId === currentViewFile.uniqueId,
+      (f) =>
+        f.id === currentViewFile.id || f.uniqueId === currentViewFile.uniqueId,
     );
     if (index === -1) {
       setCurrentViewFile(undefined);
@@ -258,20 +261,44 @@ export function FileTable({
   const handleSelectAll = () => {
     if (selectedFiles.size === files.length) {
       setSelectedFiles(new Set());
+      setSelectAnchor(null);
     } else {
       setSelectedFiles(new Set(files.map((file) => file.id)));
+      setSelectAnchor(files.length > 0 ? files.length - 1 : null);
     }
   };
 
-  const handleSelectFile = (fileId: number) => {
+  const handleSelectFile = (fileId: number, index?: number) => {
     const newSelected = new Set(selectedFiles);
     if (newSelected.has(fileId)) {
       newSelected.delete(fileId);
     } else {
       newSelected.add(fileId);
     }
+    if (index !== undefined) {
+      setSelectAnchor(index);
+    }
     setSelectedFiles(newSelected);
   };
+
+  // 把锚点行到目标行之间的行全部勾选（Shift+点击、右键菜单「选择到这里」）
+  const handleSelectTo = useCallback(
+    (targetIndex: number) => {
+      const anchor = selectAnchor ?? targetIndex;
+      const start = Math.min(anchor, targetIndex);
+      const end = Math.max(anchor, targetIndex);
+      const newSelected = new Set(selectedFiles);
+      for (let i = start; i <= end; i++) {
+        const file = files[i];
+        if (file) {
+          newSelected.add(file.id);
+        }
+      }
+      setSelectAnchor(targetIndex);
+      setSelectedFiles(newSelected);
+    },
+    [files, selectAnchor, selectedFiles],
+  );
 
   const typeBadgeLabel = useMemo(() => {
     const rawTypes =
@@ -375,7 +402,7 @@ export function FileTable({
             <Button
               variant={viewMode === "chat" ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-2.5 text-xs gap-1.5"
+              className="h-7 gap-1.5 px-2.5 text-xs"
               onClick={() => setViewMode("chat")}
               title="切换到对话视图"
             >
@@ -385,7 +412,7 @@ export function FileTable({
             <Button
               variant={viewMode === "table" ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-2.5 text-xs gap-1.5"
+              className="h-7 gap-1.5 px-2.5 text-xs"
               onClick={() => setViewMode("table")}
               title="切换到表格视图"
             >
@@ -503,7 +530,11 @@ export function FileTable({
                         file={file}
                         updateField={updateField}
                         checked={selectedFiles.has(file.id)}
-                        onCheckedChange={() => handleSelectFile(file.id)}
+                        onCheckedChange={() =>
+                          handleSelectFile(file.id, virtualRow.index)
+                        }
+                        onSelectTo={() => handleSelectTo(virtualRow.index)}
+                        canSelectTo={selectAnchor !== null}
                         onFileClick={() => {
                           setCurrentViewFile(file);
                           setViewerOpen(true);
