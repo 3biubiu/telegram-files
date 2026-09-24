@@ -165,6 +165,14 @@ public abstract class Transfer {
                 ? fileRecord.fileName()
                 : originalName;
 
+        if (defaultName.matches("^\\d{15,}.*")) {
+            String ext = FileUtil.extName(defaultName);
+            if (StrUtil.isBlank(ext) && "photo".equalsIgnoreCase(fileRecord.type())) {
+                ext = "jpg";
+            }
+            defaultName = "photo" + (StrUtil.isNotBlank(ext) ? "." + ext : "");
+        }
+
         if (!useCaptionName || StrUtil.isBlank(fileRecord.caption())) {
             return defaultName;
         }

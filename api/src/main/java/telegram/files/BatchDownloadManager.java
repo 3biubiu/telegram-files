@@ -170,6 +170,16 @@ public class BatchDownloadManager {
                     rawFileName = originFile.getName();
                 }
 
+                // If rawFileName is still an internal raw Telegram ID like 5359665276540537419_120.jpg
+                if (rawFileName.matches("^\\d{15,}.*")) {
+                    String ext = FileUtil.extName(rawFileName);
+                    if (StrUtil.isBlank(ext) && fileRecord != null && "photo".equalsIgnoreCase(fileRecord.type())) {
+                        ext = "jpg";
+                    }
+                    String base = (fileRecord != null && "photo".equalsIgnoreCase(fileRecord.type())) ? "photo" : "file";
+                    rawFileName = StrUtil.isNotBlank(ext) ? base + "." + ext : base;
+                }
+
                 String cleanedFileName = sanitizeFileName(rawFileName);
 
                 String finalFileName;
@@ -177,8 +187,8 @@ public class BatchDownloadManager {
                     String prefix = info.totalFiles >= 100
                             ? String.format("%03d_", info.orderIndex)
                             : String.format("%02d_", info.orderIndex);
-                    // Avoid duplicate sequence prefix if already prefixed
-                    if (!cleanedFileName.matches("^\\d{2,}_.*")) {
+                    // Avoid duplicate sequence prefix if already prefixed (match 2 to 4 digits only, not 15+ digit IDs!)
+                    if (!cleanedFileName.matches("^\\d{2,4}_.*")) {
                         finalFileName = prefix + cleanedFileName;
                     } else {
                         finalFileName = cleanedFileName;

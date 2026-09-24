@@ -32,7 +32,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { type TelegramFile } from "@/lib/types";
 import { isEqual } from "lodash";
 import FileViewer from "@/components/file-viewer";
-import FileFilters from "./file-filters";
+import FileFilters, { DateFilter } from "./file-filters";
 import { Badge } from "@/components/ui/badge";
 import FileBatchControl from "@/components/file-batch-control";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -336,15 +336,14 @@ export function FileTable({
               >
                 {typeBadgeLabel}
               </Badge>
-              {dateBadgeLabel && (
-                <Badge
-                  variant="outline"
-                  className="flex h-full items-center gap-1 bg-accent text-xs"
-                >
-                  <CalendarRange className="h-3 w-3 text-muted-foreground" />
-                  <span>{dateBadgeLabel}</span>
-                </Badge>
-              )}
+              <DateFilter
+                compact
+                dateType={filters.dateType}
+                dateRange={filters.dateRange}
+                onChange={(dateType, dateRange) =>
+                  handleFilterChange({ ...filters, dateType, dateRange })
+                }
+              />
               <FileFilters
                 telegramId={accountId}
                 chatId={chatId}

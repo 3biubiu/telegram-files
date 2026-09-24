@@ -115,13 +115,19 @@ const TagsFilter = ({ tags, onChange }: TagsFilterProps) => {
   );
 };
 
-interface DateFilterProps {
+export interface DateFilterProps {
   dateType: "sent" | "downloaded" | undefined;
   dateRange: [string, string] | undefined;
   onChange: (type: "sent" | "downloaded", range: [string, string] | undefined) => void;
+  compact?: boolean;
 }
 
-const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
+export const DateFilter = ({
+  dateType,
+  dateRange,
+  onChange,
+  compact = false,
+}: DateFilterProps) => {
   const [open, setOpen] = useState(false);
   const isMobile = useIsMobile();
   const [localType, setLocalType] = useState<"sent" | "downloaded">(
@@ -218,68 +224,88 @@ const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
     return "已选日期范围";
   };
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Label className="font-medium text-sm">日期范围</Label>
-          <span className="text-[11px] text-muted-foreground">(非必选)</span>
-        </div>
+  const triggerButton = compact ? (
+    <Button
+      variant="outline"
+      size="sm"
+      className={cn(
+        "h-8 gap-1.5 px-2.5 text-xs font-normal transition-colors",
+        hasDateRange && "border-primary/40 bg-accent text-primary font-medium",
+      )}
+    >
+      <CalendarRange
+        className={cn(
+          "h-3.5 w-3.5 shrink-0",
+          hasDateRange ? "text-primary" : "text-muted-foreground",
+        )}
+      />
+      <span>
+        {hasDateRange && dateRange
+          ? `${localType === "downloaded" ? "下载" : "发送"}: ${dateRange[0]} ~ ${dateRange[1]}`
+          : "日期范围"}
+      </span>
+      {hasDateRange && (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleClear();
+          }}
+          className="rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer ml-0.5"
+          title="清除日期筛选"
+        >
+          <X className="h-3 w-3" />
+        </span>
+      )}
+    </Button>
+  ) : (
+    <Button
+      variant="outline"
+      className={cn(
+        "w-full justify-between text-left font-normal h-9 text-xs transition-colors",
+        hasDateRange && "border-primary/40 bg-primary/5 text-foreground font-medium",
+      )}
+    >
+      <div className="flex items-center gap-2 truncate">
+        <CalendarRange
+          className={cn(
+            "h-4 w-4 shrink-0",
+            hasDateRange ? "text-primary" : "text-muted-foreground",
+          )}
+        />
+        <span className="truncate">{getDisplayText()}</span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {localType === "downloaded" ? "下载日期" : "发送日期"}
+        </span>
         {hasDateRange && (
-          <button
-            type="button"
-            onClick={(e) => handleClear(e)}
-            className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClear();
+            }}
+            className="rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+            title="清除日期筛选"
           >
-            清除日期
-          </button>
+            <X className="h-3.5 w-3.5" />
+          </span>
         )}
       </div>
+    </Button>
+  );
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className={cn(
-              "w-full justify-between text-left font-normal h-9 text-xs transition-colors",
-              hasDateRange && "border-primary/40 bg-primary/5 text-foreground font-medium",
-            )}
-          >
-            <div className="flex items-center gap-2 truncate">
-              <CalendarRange
-                className={cn(
-                  "h-4 w-4 shrink-0",
-                  hasDateRange ? "text-primary" : "text-muted-foreground",
-                )}
-              />
-              <span className="truncate">{getDisplayText()}</span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {localType === "downloaded" ? "下载日期" : "发送日期"}
-              </span>
-              {hasDateRange && (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleClear();
-                  }}
-                  className="rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                  title="清除日期筛选"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </span>
-              )}
-            </div>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-auto p-4"
-          side={isMobile ? undefined : "right"}
-          modal={true}
-        >
+  const popoverElement = (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+      <PopoverContent
+        className="w-auto p-4 z-50"
+        side={compact ? "bottom" : (isMobile ? undefined : "right")}
+        align={compact ? "start" : "center"}
+      >
           <div className="space-y-3.5">
             <div className="flex items-center justify-between gap-2 border-b pb-2.5">
               <span className="text-xs font-medium text-muted-foreground">
@@ -398,9 +424,33 @@ const DateFilter = ({ dateType, dateRange, onChange }: DateFilterProps) => {
           </div>
         </PopoverContent>
       </Popover>
-    </div>
-  );
-};
+    );
+
+    if (compact) {
+      return popoverElement;
+    }
+
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Label className="font-medium text-sm">日期范围</Label>
+            <span className="text-[11px] text-muted-foreground">(非必选)</span>
+          </div>
+          {hasDateRange && (
+            <button
+              type="button"
+              onClick={(e) => handleClear(e)}
+              className="text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+            >
+              清除日期
+            </button>
+          )}
+        </div>
+        {popoverElement}
+      </div>
+    );
+  };
 
 interface SizeFilterProps {
   sizeRange: [number, number] | undefined;
